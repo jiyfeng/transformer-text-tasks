@@ -93,7 +93,7 @@ def main(arg):
                     inp = inp[:, :mx]
                 out = model(inp).argmax(dim=1)
 
-                total = float(inp.size(0))
+                total += float(inp.size(0))
                 correct += float((label == out).sum().item())
             acc = correct / total
             print(f'-- {"Test" if arg.final else "Validation"} accuracy {acc:.3}')
