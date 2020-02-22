@@ -23,6 +23,7 @@ class TCTransformer(nn.Module):
         self.to_probs = nn.Linear(emb, num_classes)
 
     def forward(self, x):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         """
         :param x: A (b, t) tensor of integer values representing
                   words (in some predetermined vocabulary).
@@ -34,7 +35,7 @@ class TCTransformer(nn.Module):
         b, t, k = tokens.size()
 
         # generate position embeddings
-        positions = torch.arange(t)
+        positions = torch.arange(t, device=device)
         positions = self.pos_emb(positions)[None, :, :].expand(b, t, k)
 
         x = tokens + positions
