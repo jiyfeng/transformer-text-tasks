@@ -20,6 +20,8 @@ Creates and trains a basic transformer for the IMDB sentiment classification tas
 def main(arg):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print("Device: ", device)
+
     # load the IMDB data
     if arg.final:
         train, test = datasets.IMDB.splits(TEXT, LABEL)
@@ -28,10 +30,7 @@ def main(arg):
         train_iter, test_iter = data.BucketIterator.splits((train, test), batch_size=arg.batch_size, device=device)
     else:
         tdata, _ = datasets.IMDB.splits(TEXT, LABEL)
-        # train, test = tdata.split(split_ratio=0.8)
-        td, _ = tdata.split(split_ratio=0.1)
-        train, test = td.split(split_ratio=0.8)
-
+        train, test = tdata.split(split_ratio=0.8)
         TEXT.build_vocab(train, max_size=arg.vocab_size - 2)
         LABEL.build_vocab(train)
         train_iter, test_iter = data.BucketIterator.splits((train, test), batch_size=arg.batch_size, device=device)
@@ -75,7 +74,6 @@ def main(arg):
             loss = F.nll_loss(output, label)
             loss.backward()
 
-            # clip gradients
             # clip gradients vector length if > 1 to 1
             if arg.gradient_clipping > 0.0:
                 nn.utils.clip_grad_norm_(model.parameters(), arg.gradient_clipping)
