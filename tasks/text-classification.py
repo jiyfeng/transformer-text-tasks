@@ -124,7 +124,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--num-epochs",
                         dest="num_epochs",
                         help="Number of epochs.",
-                        default=5, type=int)
+                        default=80, type=int)
 
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument("-l", "--learn-rate",
                         dest="lr",
                         help="Learning rate",
-                        default=0.0005, type=float)
+                        default=0.0001, type=float)
 
     parser.add_argument("-T", "--tb_dir", dest="tb_dir",
                         help="Tensorboard logging directory",
@@ -176,7 +176,7 @@ if __name__ == '__main__':
     parser.add_argument("--lr-warmup",
                         dest="lr_warmup",
                         help="Learning rate warmup.",
-                        default=50, type=int)
+                        default=10_000, type=int)
 
     parser.add_argument("--gradient-clipping",
                         dest="gradient_clipping",
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     parser.add_argument("-D", "--dropout",
                         dest="dropout",
                         help="Dropout rate.",
-                        default=0.2, type=float)
+                        default=0.0, type=float)
 
     options = parser.parse_args()
     print('OPTIONS', options)
