@@ -8,36 +8,46 @@ Created on Sat Feb 22 02:28:36 2020
 import numpy as np
 
 convlines = []
-with open('movie_conversations.txt') as f:
+j = 0
+with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_conversations.txt', encoding="utf8", errors='ignore') as f:
     conv = f.readlines()
+    # conv.encode('utf-8').strip()
     for c in conv:
-        split = c.split(' +++$+++ ')
+        # print(lines)
+        split = str(c).split(' +++$+++ ')
         lines = split[-1]
         l = len(lines)
         lines = lines[2:l-3]
+        # print(lines)
         splitlines = lines.split("', '")
         for i in range(len(splitlines)-1):
-            convlines.append((splitlines[i], splitlines[i+1])) 
+            convlines.append((splitlines[i], splitlines[i+1]))
+        # j += 1
+        # if j > 3:
+        #     exit(0)
 
 dic = {}
-with open('movie_lines.txt') as m:
+with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_lines.txt', encoding="utf8", errors='ignore') as m:
     lines = m.readlines()
     for line in lines:
+        # print(line)
         split = line.split(' +++$+++ ')
         dic[split[0]] = split[-1].split('\n')[0]
 
-print(convlines[:10])
-print(dic)        
-
+print(convlines[:5])
+print(list(dic.keys())[:5])
+# exit(0)
 convtexts = []
 for tp in convlines:
+    # print(tp)
+    # if tp[0] in dic and tp[1] in dic:
     t1 = dic[tp[0]]
     t2 = dic[tp[1]]
     if len(t1.split()) > 2:
         convtexts.append((t1, t2))
         
-convtexts = convtexts[:10]
-        
+convtexts = convtexts[5:10]
+print(convtexts)
 import torch
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
@@ -48,37 +58,47 @@ logging.basicConfig(level=logging.INFO)
 # Load pre-trained model tokenizer (vocabulary)
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 
-# Encode a text inputs
-text = "Who was Jim Henson ? Jim Henson was a"
-indexed_tokens = tokenizer.encode(text)
-
-# Convert indexed tokens in a PyTorch tensor
-tokens_tensor = torch.tensor([indexed_tokens])
-
-
-# Let’s see how to use GPT2LMHeadModel to generate the next token following our text:
-
-# Load pre-trained model (weights)
 model = GPT2LMHeadModel.from_pretrained('gpt2')
-
-# Set the model in evaluation mode to deactivate the DropOut modules
-# This is IMPORTANT to have reproducible results during evaluation!
 model.eval()
 
-# If you have a GPU, put everything on cuda
-# tokens_tensor = tokens_tensor.to('cuda')
-# model.to('cuda')
+# Encode a text inputs
+for i in range(len(convtexts)):
+    print("\nconvtext i", i)
+    source0 = convtexts[i][0]
+    source = " ".join(source0.split()[:-5])
+    target = convtexts[i][1]
+    indexed_tokens = tokenizer.encode(source)
 
-# Predict all tokens
-with torch.no_grad():
-    outputs = model(tokens_tensor)
-    predictions = outputs[0]
+    ## for end of text - <|endoftext|>
 
-# get the predicted next sub-word (in our case, the word 'man')
-predicted_index = torch.argmax(predictions[0, -1, :]).item()
-predicted_text = tokenizer.decode(indexed_tokens + [predicted_index])
-assert predicted_text == 'Who was Jim Henson? Jim Henson was a man'
+    tokens_tensor = torch.tensor([indexed_tokens])
+    # OnGPU, put everything on cuda
+    # tokens_tensor = tokens_tensor.to('cuda')
+    # model.to('cuda')
+    predicted_texts = list()
+    predicted_text = ''
+    # Predict all tokens
+    count_words = len(indexed_tokens)
+    while not predicted_text == '<|endoftext|>' and count_words < 50:
+    # while count_words < 100:
+        with torch.no_grad():
+            outputs = model(tokens_tensor)
+            predictions = outputs[0]
 
-print()
-print("Text", text)
-print("Predicted", predicted_text)
+        # get the predicted next sub-word (in our case, the word 'man')
+        predicted_index = torch.argmax(predictions[0, -1, :]).item()
+
+        # print("predicted_index", torch.tensor([[predicted_index]]))
+        # print("tokens_tensor size", tokens_tensor.size())
+        # print("predictions size", predictions.size())
+
+        tokens_tensor = torch.cat((tokens_tensor, torch.tensor([[predicted_index]])), dim = 1)
+        predicted_text = tokenizer.decode([predicted_index])
+        predicted_texts.append(predicted_text)
+        # print(predicted_text)
+        count_words += 1
+
+    print("Full Source: ", source0)
+    print("Source Given: ", source)
+    # print("Target: ", target)
+    print("Predicted: ", "".join(predicted_texts))
