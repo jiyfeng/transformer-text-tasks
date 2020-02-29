@@ -1,4 +1,7 @@
 import numpy as np
+import torch
+from torch import nn
+from torch.nn import functional as F
 
 convlines = []
 j = 0
@@ -42,7 +45,6 @@ for tp in convlines:
 
 convtexts = convtexts[5:10]
 print(convtexts)
-import torch
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
@@ -60,7 +62,7 @@ model.eval()
 for i in range(len(convtexts)):
     print("\nconvtext i", i)
     source0 = convtexts[i][0]
-    source = " ".join(source0.split()[:3])
+    source = " ".join(source0.split()[:-17])
     target = convtexts[i][1]
     indexed_tokens = tokenizer.encode(source)
 
@@ -73,23 +75,46 @@ for i in range(len(convtexts)):
     predicted_word = ''
     # Predict all tokens
     count_words = len(indexed_tokens)
-    while predicted_word != '<|endoftext|>' and predicted_word != '.' and count_words < 100:
-    # while count_words < 50:
+
+    # Store in queue - indexed_tokens
+    queue = [indexed_tokens]
+
+    while len(queue) and count_words < 300:
+        print('==============================Iter '+str(count_words)+'==========================================')
+        # print("Queue", queue)
+        indexed_tokens = queue.pop(0)
+        last_word = indexed_tokens[-1]
+        if tokenizer.decode(last_word) == "<|endoftext|>" or tokenizer.decode(last_word) == ".":
+            continue
         tokens_tensor = torch.tensor([indexed_tokens])
         with torch.no_grad():
             outputs = model(tokens_tensor)
-            predictions = outputs[0]
+            predictions = outputs[0][0][-1]
 
         # get the predicted next sub-word (in our case, the word 'man')
-        predicted_index = torch.argmax(predictions[0, -1, :]).item()
-
-        # print("predicted_index", torch.tensor([[predicted_index]]))
-        # print("tokens_tensor size", tokens_tensor.size())
-        # print("predictions size", predictions.size())
-
-        indexed_tokens.append(predicted_index)
-        predicted_word = tokenizer.decode([predicted_index])
-        predicted_text = tokenizer.decode(indexed_tokens)
+        # predicted_index = torch.argmax(predictions[-1, :]).item()
+        k = 1
+        sequences = [[list(), 0]]
+        all_candidates = list()
+        print(predictions.size(), predictions)
+        row = F.softmax(predictions)
+        for i in range(len(sequences)):
+            seq, score = sequences[i]
+            for j in range(len(row)):
+                candidate = (seq + [j], score + -torch.log10(row[j]))
+                all_candidates.append(candidate)
+        sequences = sorted(all_candidates, key=lambda t: t[1])[:k]
+        print("Full Source: ", source0)
+        print("Source Given: ", source)
+        l = 0
+        for pred in sequences:
+            # print(pred)
+            predicted_index = pred[0][0]
+            predicted_word = tokenizer.decode([predicted_index])
+            predicted_text = tokenizer.decode(indexed_tokens + [predicted_index])
+            print(l, predicted_text)
+            queue.append(indexed_tokens + [predicted_index])
+            l += 1
 
         count_words += 1
 
