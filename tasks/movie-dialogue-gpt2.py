@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Feb 22 02:28:36 2020
-
-@author: gaurav
-"""
-
 import numpy as np
 
 convlines = []
