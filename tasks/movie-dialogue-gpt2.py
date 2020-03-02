@@ -1,39 +1,30 @@
-import numpy as np
 import torch
-from torch import nn
 from torch.nn import functional as F
+
+from tasks.decoder import top_k_sampling, top_p_sampling
 
 convlines = []
 j = 0
 with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_conversations.txt', encoding="utf8",
           errors='ignore') as f:
     conv = f.readlines()
-    # conv.encode('utf-8').strip()
     for c in conv:
-        # print(lines)
         split = str(c).split(' +++$+++ ')
         lines = split[-1]
         l = len(lines)
         lines = lines[2:l - 3]
-        # print(lines)
         splitlines = lines.split("', '")
         for i in range(len(splitlines) - 1):
             convlines.append((splitlines[i], splitlines[i + 1]))
-        # j += 1
-        # if j > 3:
-        #     exit(0)
 
 dic = {}
 with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_lines.txt', encoding="utf8", errors='ignore') as m:
     lines = m.readlines()
     for line in lines:
-        # print(line)
         split = line.split(' +++$+++ ')
         dic[split[0]] = split[-1].split('\n')[0]
 
-print(convlines[:5])
-print(list(dic.keys())[:5])
-# exit(0)
+
 convtexts = []
 for tp in convlines:
     # print(tp)
@@ -43,8 +34,8 @@ for tp in convlines:
     if len(t1.split()) > 2:
         convtexts.append((t1, t2))
 
-convtexts = convtexts[5:10]
-print(convtexts)
+# convtexts = convtexts[5:10]
+
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
@@ -61,64 +52,47 @@ model.eval()
 # Encode a text inputs
 for i in range(len(convtexts)):
     print("\nconvtext i", i)
-    source0 = convtexts[i][0]
-    source = " ".join(source0.split()[:-17])
-    target = convtexts[i][1]
-    indexed_tokens = tokenizer.encode(source)
+    full_source = convtexts[i][0]
+    source = " ".join(full_source.split()[:2])
+    # target = convtexts[i][1]
 
     ## for end of text - <|endoftext|>
-
     # OnGPU, put everything on cuda
     # tokens_tensor = tokens_tensor.to('cuda')
     # model.to('cuda')
-    predicted_texts = list()
-    predicted_word = ''
-    # Predict all tokens
-    count_words = len(indexed_tokens)
 
-    # Store in queue - indexed_tokens
-    queue = [indexed_tokens]
+    k = 50
+    p = 0.8
+    num_words = 20
+    temperature = 1
 
-    while len(queue) and count_words < 300:
-        print('==============================Iter '+str(count_words)+'==========================================')
-        # print("Queue", queue)
-        indexed_tokens = queue.pop(0)
-        last_word = indexed_tokens[-1]
-        if tokenizer.decode(last_word) == "<|endoftext|>" or tokenizer.decode(last_word) == ".":
-            continue
+    ###
+    is_first = True
+    indexed_tokens = tokenizer.encode(source)
+    i = 0
+    while i < num_words:
+        last_word = tokenizer.decode(indexed_tokens[-1])
+        if not is_first and last_word == ".":
+            is_first = False
+        # if last_word == '"':
+        #     continue
+        if last_word == "<|endoftext|>":
+            break
+
         tokens_tensor = torch.tensor([indexed_tokens])
         with torch.no_grad():
             outputs = model(tokens_tensor)
             predictions = outputs[0][0][-1]
 
-        # get the predicted next sub-word (in our case, the word 'man')
-        # predicted_index = torch.argmax(predictions[-1, :]).item()
-        k = 1
-        sequences = [[list(), 0]]
-        all_candidates = list()
-        print(predictions.size(), predictions)
-        row = F.softmax(predictions)
-        for i in range(len(sequences)):
-            seq, score = sequences[i]
-            for j in range(len(row)):
-                candidate = (seq + [j], score + -torch.log10(row[j]))
-                all_candidates.append(candidate)
-        sequences = sorted(all_candidates, key=lambda t: t[1])[:k]
-        print("Full Source: ", source0)
-        print("Source Given: ", source)
-        l = 0
-        for pred in sequences:
-            # print(pred)
-            predicted_index = pred[0][0]
-            predicted_word = tokenizer.decode([predicted_index])
-            predicted_text = tokenizer.decode(indexed_tokens + [predicted_index])
-            print(l, predicted_text)
-            queue.append(indexed_tokens + [predicted_index])
-            l += 1
+        probabilities = F.softmax(predictions / temperature)
 
-        count_words += 1
+        # predicted_index = top_k_sampling(probabilities, k=k)
+        predicted_index = top_p_sampling(probabilities, p=p)
 
-    print("Full Source: ", source0)
+        indexed_tokens.append(predicted_index)
+        i += 1
+    predicted_text = tokenizer.decode(indexed_tokens)
+
+    print("Full Source: ", full_source)
     print("Source Given: ", source)
-    # print("Target: ", target)
     print("Predicted: ", predicted_text)
