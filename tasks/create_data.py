@@ -2,12 +2,10 @@ import numpy as np
 import os
 import csv
 
-path = 'C:/Users/gaurav/Desktop/UVA@second_sem/IS/transformer/cornell_movie_dialogs_corpus/cornell movie-dialogs corpus'
-os.chdir(path)
-
+# path = 'C:/Users/gaurav/Desktop/UVA@second_sem/IS/transformer/cornell_movie_dialogs_corpus/cornell movie-dialogs corpus'
 convlines = []
 j = 0
-with open('movie_conversations.txt', encoding="utf8",
+with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_conversations.txt', encoding="utf8",
           errors='ignore') as f:
     conv = f.readlines()
     for c in conv:
@@ -21,14 +19,11 @@ with open('movie_conversations.txt', encoding="utf8",
             convlines.append((splitlines[i], splitlines[i + 1]))
 
 dic = {}
-with open('movie_lines.txt', encoding="utf8", errors='ignore') as m:
+with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_lines.txt', encoding="utf8", errors='ignore') as m:
     lines = m.readlines()
     for line in lines:
         split = line.split(' +++$+++ ')
         dic[split[0]] = split[-1].split('\n')[0]
-
-print(convlines[:5])
-print(list(dic.keys())[:5])
 
 convtexts = []
 for tp in convlines:
@@ -38,8 +33,8 @@ for tp in convlines:
         convtexts.append([t1, t2])
 
 
-with open("dialogue_data.csv", "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerows(convtexts[:100])
+with open(".data/dialogue_data.tsv", "w", newline="") as f:
+    writer = csv.writer(f, delimiter='\t')
+    writer.writerows(convtexts[:500])
 
-print("Saved data into CSV file")
+print("Saved data into TSV file")
