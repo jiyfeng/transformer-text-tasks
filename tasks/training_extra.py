@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
+from tasks.decoder import top_p_sampling
 from transformer.tc_transformer import TCTransformer
 
 TEXT = data.Field(lower=True, include_lengths=True, batch_first=True)
@@ -31,11 +32,14 @@ def main(arg):
     train_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=True)
     validation_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=False)
 
+    it = 0
     for source, target in train_data_loader:
-        print('Source', source)
-        print(len(source[0].split()))
-        print('Target', target)
-        break
+        if it == 192 or it == 191 or it == 193:
+            print('Source', source)
+            print(len(source[0].split()))
+            print('Target', target)
+            break
+        it += 1
 
     print('num of training examples: ', len(train_data_loader))
     print('num of test examples: ', len(validation_data_loader))
@@ -70,19 +74,30 @@ def main(arg):
                 source = source[:, :mx]
             tok_inp = tokenizer.encode(source)
             tok_tar = tokenizer.encode(target)
-            for target in tok_tar:
+            tar_ct = 0
+            for tar in tok_tar:
                 inp_tensor = torch.tensor([tok_inp])
+                print('inp tensor size', inp_tensor.size())
+                print('inp tensor', inp_tensor)
+                tar = torch.tensor(tar)
+                if device == 'cuda':
+                    inp_tensor = inp_tensor.to('cuda')
+                    tar = tar.to('cuda')
                 output = model(inp_tensor)
                 pred = output[0][0][-1]
-                pred_prob = F.log_softmax(pred)
-                loss = F.nll_loss(pred_prob.unsqueeze(0), torch.tensor(target).unsqueeze(0))
+                pred_prob = F.softmax(pred)
+                print("Tar count", tar_ct)
+                loss = F.nll_loss(-torch.log(pred_prob).unsqueeze(0), tar.unsqueeze(0))
                 loss.backward()
                 # clip gradients vector length if > 1 to 1
                 if arg.gradient_clipping > 0.0:
                     nn.utils.clip_grad_norm_(model.parameters(), arg.gradient_clipping)
                 optim.step()
                 sched.step()
+                pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
+                tok_inp.append(pred_idx)
                 seen += inp_tensor.size(0)
+                tar_ct += 1
 
         print('Training done for epoch ', epoch)
 
@@ -111,7 +126,7 @@ if __name__ == '__main__':
 
     """
     Arguments:
-        --num_epochs,   -e  Number of epochs
+        --num-epochs,   -e  Number of epochs
         --batch-size,   -b  Batch size
         --learn-rate,   -l  Learning rate
         --tb_dir,       -T  Tensorboard logging directory 
@@ -194,6 +209,11 @@ if __name__ == '__main__':
                         dest="dropout",
                         help="Dropout rate.",
                         default=0.0, type=float)
+
+    parser.add_argument("-p", "--top-p",
+                        dest="top_p",
+                        help="Top P sampling.",
+                        default=0.9, type=float)
 
     options = parser.parse_args()
     print('OPTIONS', options)
