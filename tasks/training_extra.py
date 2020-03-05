@@ -13,6 +13,7 @@ from argparse import ArgumentParser
 import tqdm     # CLI progress bar
 import pandas as pd
 import numpy as np
+import matplotlib.pylab as plt
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 from tasks.decoder import top_p_sampling
 
@@ -31,7 +32,7 @@ def main(arg):
     print("Device: ", device)
 
     convtexts = pd.read_csv('.data/dialogue_data.tsv', sep='\t')
-    convtexts = np.array(convtexts)[:5].tolist()
+    convtexts = np.array(convtexts)[:2].tolist()
     train_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=True)
     validation_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=False)
 
@@ -166,6 +167,16 @@ def main(arg):
     model_file = 'saved_model.pkl'
     torch.save(model, model_file)
 
+    plt.figure(figsize = (10, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(validation_loss_list, 'bo-', label = 'val-loss')
+    plt.plot(training_loss_list, 'ro-', label = 'train-loss')
+    plt.grid('on')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['validation', 'training'], loc='upper right')
+    plt.savefig("Loss_vs_epoch.png")
+
 if __name__ == '__main__':
     parser = ArgumentParser()
 
@@ -191,7 +202,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--num-epochs",
                         dest="num_epochs",
                         help="Number of epochs.",
-                        default=80, type=int)
+                        default=2, type=int)
 
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
