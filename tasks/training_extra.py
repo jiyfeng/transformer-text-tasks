@@ -163,6 +163,11 @@ def main(arg):
             sched.step()
             print("epoch", epoch, "validation_loss", validation_loss)
             validation_loss_list.append(validation_loss)
+            # Save loss in text file
+            c = [training_loss_list, validation_loss_list]
+            with open("loss.txt", "w") as file:
+                for x in zip(*c):
+                    file.write("{0}\t{1}\n".format(*x))
 
     model_file = 'saved_model.pkl'
     torch.save(model, model_file)
