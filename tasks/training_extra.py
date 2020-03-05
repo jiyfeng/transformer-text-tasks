@@ -1,3 +1,7 @@
+# Supress unnecessary warnings so that presentation looks clean
+import warnings
+warnings.filterwarnings('ignore')
+
 # import sys
 # sys.path.append('transformer')
 import torch
@@ -10,9 +14,7 @@ import tqdm     # CLI progress bar
 import pandas as pd
 import numpy as np
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
-
 from tasks.decoder import top_p_sampling
-from transformer.tc_transformer import TCTransformer
 
 TEXT = data.Field(lower=True, include_lengths=True, batch_first=True)
 LABEL = data.Field(sequential=False)
@@ -24,11 +26,12 @@ Creates and trains a basic transformer for the IMDB sentiment classification tas
 """
 def main(arg):
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    cuda_flag = False
+    device = 'cuda' if cuda_flag and torch.cuda.is_available() else 'cpu'
     print("Device: ", device)
 
     convtexts = pd.read_csv('.data/dialogue_data.tsv', sep='\t')
-    convtexts = np.array(convtexts).tolist()
+    convtexts = np.array(convtexts)[:5].tolist()
     train_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=True)
     validation_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=False)
 
@@ -62,64 +65,106 @@ def main(arg):
 
     # Training loop
     seen = 0
+    training_loss_list = []
+    validation_loss_list = []
     for epoch in range(arg.num_epochs):
         print("\n Epoch: ", epoch)
         model.train(True)
-        for source, target in tqdm.tqdm(train_data_loader):
-            optim.zero_grad()
-            source = source[0]
-            target = target[0]
-            source_size = len(source.split())
-            if source_size > mx:
-                source = source[:, :mx]
-            tok_inp = tokenizer.encode(source)
-            tok_tar = tokenizer.encode(target)
-            tar_ct = 0
-            for tar in tok_tar:
-                inp_tensor = torch.tensor([tok_inp])
-                print('inp tensor size', inp_tensor.size())
-                print('inp tensor', inp_tensor)
-                tar = torch.tensor(tar)
-                if device == 'cuda':
-                    inp_tensor = inp_tensor.to('cuda')
-                    tar = tar.to('cuda')
-                output = model(inp_tensor)
-                pred = output[0][0][-1]
-                pred_prob = F.softmax(pred)
-                print("Tar count", tar_ct)
-                loss = F.nll_loss(-torch.log(pred_prob).unsqueeze(0), tar.unsqueeze(0))
-                loss.backward()
-                # clip gradients vector length if > 1 to 1
-                if arg.gradient_clipping > 0.0:
-                    nn.utils.clip_grad_norm_(model.parameters(), arg.gradient_clipping)
-                optim.step()
-                sched.step()
-                pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
-                tok_inp.append(pred_idx)
-                seen += inp_tensor.size(0)
-                tar_ct += 1
+        training_loss = 0
+        batch_count = 0
+        for source_list, target_list in tqdm.tqdm(train_data_loader):
+            batch_count += 1
+            print("epoch", epoch, "Running Batch", batch_count)
+            for index in range(len(source_list)):
+                optim.zero_grad()
+                source = source_list[index]
+                target = target_list[index]
+                source_size = len(source.split())
+                if source_size > mx:
+                    source = source[:, :mx]
+                tok_inp = tokenizer.encode(source)
+                tok_tar = tokenizer.encode(target)
+                tar_ct = 0
+                for tar_el in tok_tar:
+                    inp_tensor = torch.tensor([tok_inp])
+                    # print('inp tensor size', inp_tensor.size())
+                    # print('inp tensor', inp_tensor)
+                    tar = torch.tensor(tar_el)
+                    if device == 'cuda':
+                        inp_tensor = inp_tensor.to('cuda')
+                        tar = tar.to('cuda')
+                    output = model(inp_tensor)
+                    pred = output[0][0][-1]
+                    pred_prob = F.softmax(pred)
+                    # print("Tar count", tar_ct)
+                    loss = F.nll_loss(torch.log(pred_prob).unsqueeze(0), tar.unsqueeze(0))
+                    training_loss += loss
+                    loss.backward()
+                    # clip gradients vector length if > 1 to 1
+                    if arg.gradient_clipping > 0.0:
+                        nn.utils.clip_grad_norm_(model.parameters(), arg.gradient_clipping)
+                    optim.step()
+                    sched.step()
+                    pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
+                    tok_inp.append(tar_el)
+                    seen += inp_tensor.size(0)
 
-        print('Training done for epoch ', epoch)
+                # print("Source Given: ", source)
+                # predicted_text = tokenizer.decode(tok_inp)
+                # print("Predicted: ", predicted_text)
+                # print("Target: ", target)
+
+        print("epoch", epoch, "training_loss", training_loss)
+        training_loss_list.append(training_loss)
+
+        with torch.no_grad():
+            model.eval()
+            batch_count = 0
+            validation_loss = 0
+            for source_list, target_list in tqdm.tqdm(validation_data_loader):
+                batch_count += 1
+                print("epoch", epoch, "Running Batch", batch_count)
+                for index in range(len(source_list)):
+                    optim.zero_grad()
+                    source = source_list[index]
+                    target = target_list[index]
+                    source_size = len(source.split())
+                    if source_size > mx:
+                        source = source[:, :mx]
+                    tok_inp = tokenizer.encode(source)
+                    tok_tar = tokenizer.encode(target)
+                    tar_ct = 0
+                    for tar in tok_tar:
+                        inp_tensor = torch.tensor([tok_inp])
+                        # print('inp tensor size', inp_tensor.size())
+                        # print('inp tensor', inp_tensor)
+                        tar = torch.tensor(tar)
+                        if device == 'cuda':
+                            inp_tensor = inp_tensor.to('cuda')
+                            tar = tar.to('cuda')
+                        output = model(inp_tensor)
+                        pred = output[0][0][-1]
+                        pred_prob = F.softmax(pred)
+                        # print("Tar count", tar_ct)
+                        loss = F.nll_loss(torch.log(pred_prob).unsqueeze(0), tar.unsqueeze(0))
+                        validation_loss += loss
+                        pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
+                        tok_inp.append(pred_idx)
+                        seen += inp_tensor.size(0)
+                        batch_count += 1
+                        print("epoch", epoch, "Running Batch", batch_count)
+
+                    print("Source Given: ", source)
+                    predicted_text = tokenizer.decode(tok_inp)
+                    print("Predicted: ", predicted_text)
+                    print("Target: ", target)
+
+            sched.step()
+            print("epoch", epoch, "validation_loss", validation_loss)
+            validation_loss_list.append(validation_loss)
 
     model_file = 'saved_model.pkl'
     torch.save(model, model_file)
-
-        # with torch.no_grad():
-        #     model.train(False)
-        #     total, correct = 0.0, 0.0
-        #
-        #     for batch in test_iter:
-        #         inp = batch.text[0]
-        #         label = batch.label - 1
-        #         if inp.size(1) > mx:
-        #             inp = inp[:, :mx]
-        #         out = model(inp).argmax(dim=1)
-        #
-        #         total += float(inp.size(0))
-        #         correct += float((label == out).sum().item())
-        #     acc = correct / total
-        #     print(f'-- {"Test" if arg.final else "Validation"} accuracy {acc:.3}')
-
 
 if __name__ == '__main__':
     parser = ArgumentParser()

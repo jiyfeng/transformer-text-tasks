@@ -2,10 +2,12 @@ import numpy as np
 import os
 import csv
 
-# path = 'C:/Users/gaurav/Desktop/UVA@second_sem/IS/transformer/cornell_movie_dialogs_corpus/cornell movie-dialogs corpus'
+#path = 'C:/Users/gaurav/Desktop/UVA@second_sem/IS/transformer/tf/'
+path = '/Users/mohit/Downloads/cornell movie-dialogs corpus/'
+
 convlines = []
 j = 0
-with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_conversations.txt', encoding="utf8",
+with open(path + 'movie_conversations.txt', encoding="utf8",
           errors='ignore') as f:
     conv = f.readlines()
     for c in conv:
@@ -19,7 +21,7 @@ with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_conversatio
             convlines.append((splitlines[i], splitlines[i + 1]))
 
 dic = {}
-with open('/Users/mohit/Downloads/cornell movie-dialogs corpus/movie_lines.txt', encoding="utf8", errors='ignore') as m:
+with open(path + 'movie_lines.txt', encoding="utf8", errors='ignore') as m:
     lines = m.readlines()
     for line in lines:
         split = line.split(' +++$+++ ')
