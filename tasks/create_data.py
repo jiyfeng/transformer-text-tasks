@@ -2,9 +2,9 @@ import numpy as np
 import os
 import csv
 
-#path = 'C:/Users/gaurav/Desktop/UVA@second_sem/IS/transformer/tf/'
-path = '/Users/mohit/Downloads/cornell movie-dialogs corpus/'
-
+# path = 'C:/Users/gaurav/Desktop/UVA@second_sem/IS/transformer/cornell_movie_dialogs_corpus/cornell movie-dialogs corpus'
+# path = '/Users/mohit/Downloads/cornell movie-dialogs corpus/'
+path = '/u/ms5sw/cornell movie-dialogs corpus/'
 convlines = []
 j = 0
 with open(path + 'movie_conversations.txt', encoding="utf8",
@@ -31,12 +31,12 @@ convtexts = []
 for tp in convlines:
     t1 = dic[tp[0]]
     t2 = dic[tp[1]]
-    if len(t1.split()) > 2:
-        convtexts.append([t1, t2])
+    # if len(t1.split()) > 2:
+    convtexts.append([t1, t2])
 
 
 with open(".data/dialogue_data.tsv", "w", newline="") as f:
     writer = csv.writer(f, delimiter='\t')
-    writer.writerows(convtexts[:500])
+    writer.writerows(convtexts)
 
 print("Saved data into TSV file")
