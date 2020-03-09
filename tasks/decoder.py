@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import random
 
 
 def top_k_sampling(probs, k):
@@ -21,6 +22,11 @@ def top_p_sampling(probs, p):
         return sorted_indexes[0].item()
     top_p = top_p.type(torch.FloatTensor)
     return int(top_p[torch.multinomial(top_p, 1)].item())
+
+
+def scheduled_sampler(pred, truth, prob):
+
+    return random.choices(population=[pred, truth], weights=[prob, 1-prob], k=1)
 
 
 def beam_search(tokenizer, model, num_words, k, source_sent):

@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pylab as plt
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
-from tasks.decoder import top_p_sampling
+from tasks.decoder import top_p_sampling, scheduled_sampler
 
 TEXT = data.Field(lower=True, include_lengths=True, batch_first=True)
 LABEL = data.Field(sequential=False)
@@ -47,6 +47,12 @@ def main(arg):
     # Load pre-trained model tokenizer (vocabulary)
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     model = GPT2LMHeadModel.from_pretrained('gpt2')
+
+    # it = 0
+    # for src, tar in train_data_loader:
+    #     if it == 495:
+    #         print(src, tar)
+    #     it += 1
 
     if device == 'cuda':
         model.cuda()
@@ -91,7 +97,8 @@ def main(arg):
                         nn.utils.clip_grad_norm_(model.parameters(), arg.gradient_clipping)
                     optim.step()
                     pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
-                    tok_inp.append(tar_el)
+                    scheduled_sample = scheduled_sampler(pred_idx, tar_el, 0.2)
+                    tok_inp.append(scheduled_sample)
                     seen += inp_tensor.size(0)
 
         print("epoch", epoch, "training_loss", training_loss)
@@ -127,7 +134,6 @@ def main(arg):
                         tok_inp.append(pred_idx)
                         seen += inp_tensor.size(0)
                         batch_count += 1
-                        print("epoch", epoch, "Running Batch", batch_count)
 
                     print("Source Given: ", source)
                     predicted_text = tokenizer.decode(tok_inp)
