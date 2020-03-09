@@ -31,18 +31,9 @@ def main(arg):
     print("Device: ", device)
 
     convtexts = pd.read_csv('.data/dialogue_data.tsv', sep='\t')
-    convtexts = np.array(convtexts)[:2].tolist()
+    convtexts = np.array(convtexts).tolist()
     train_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=True)
     validation_data_loader = torch.utils.data.DataLoader(convtexts, batch_size=batch_size, shuffle=False)
-
-    it = 0
-    for source, target in train_data_loader:
-        if it == 192 or it == 191 or it == 193:
-            print('Source', source)
-            print(len(source[0].split()))
-            print('Target', target)
-            break
-        it += 1
 
     print('num of training examples: ', len(train_data_loader))
     print('num of test examples: ', len(validation_data_loader))
@@ -74,7 +65,6 @@ def main(arg):
         batch_count = 0
         for source_list, target_list in tqdm.tqdm(train_data_loader):
             batch_count += 1
-            print("epoch", epoch, "Running Batch", batch_count)
             for index in range(len(source_list)):
                 optim.zero_grad()
                 source = source_list[index]
@@ -84,11 +74,8 @@ def main(arg):
                     source = source[:, :mx]
                 tok_inp = tokenizer.encode(source)
                 tok_tar = tokenizer.encode(target)
-                tar_ct = 0
                 for tar_el in tok_tar:
                     inp_tensor = torch.tensor([tok_inp])
-                    # print('inp tensor size', inp_tensor.size())
-                    # print('inp tensor', inp_tensor)
                     tar = torch.tensor(tar_el)
                     if device == 'cuda':
                         inp_tensor = inp_tensor.to('cuda')
@@ -96,7 +83,6 @@ def main(arg):
                     output = model(inp_tensor)
                     pred = output[0][0][-1]
                     pred_prob = F.softmax(pred)
-                    # print("Tar count", tar_ct)
                     loss = F.nll_loss(torch.log(pred_prob).unsqueeze(0), tar.unsqueeze(0))
                     training_loss += loss
                     loss.backward()
@@ -104,15 +90,9 @@ def main(arg):
                     if arg.gradient_clipping > 0.0:
                         nn.utils.clip_grad_norm_(model.parameters(), arg.gradient_clipping)
                     optim.step()
-                    sched.step()
                     pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
                     tok_inp.append(tar_el)
                     seen += inp_tensor.size(0)
-
-                # print("Source Given: ", source)
-                # predicted_text = tokenizer.decode(tok_inp)
-                # print("Predicted: ", predicted_text)
-                # print("Target: ", target)
 
         print("epoch", epoch, "training_loss", training_loss)
         training_loss_list.append(training_loss)
@@ -123,7 +103,6 @@ def main(arg):
             validation_loss = 0
             for source_list, target_list in tqdm.tqdm(validation_data_loader):
                 batch_count += 1
-                print("epoch", epoch, "Running Batch", batch_count)
                 for index in range(len(source_list)):
                     optim.zero_grad()
                     source = source_list[index]
@@ -133,11 +112,8 @@ def main(arg):
                         source = source[:, :mx]
                     tok_inp = tokenizer.encode(source)
                     tok_tar = tokenizer.encode(target)
-                    tar_ct = 0
                     for tar in tok_tar:
                         inp_tensor = torch.tensor([tok_inp])
-                        # print('inp tensor size', inp_tensor.size())
-                        # print('inp tensor', inp_tensor)
                         tar = torch.tensor(tar)
                         if device == 'cuda':
                             inp_tensor = inp_tensor.to('cuda')
@@ -145,7 +121,6 @@ def main(arg):
                         output = model(inp_tensor)
                         pred = output[0][0][-1]
                         pred_prob = F.softmax(pred)
-                        # print("Tar count", tar_ct)
                         loss = F.nll_loss(torch.log(pred_prob).unsqueeze(0), tar.unsqueeze(0))
                         validation_loss += loss
                         pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
@@ -164,7 +139,7 @@ def main(arg):
             validation_loss_list.append(validation_loss)
             # Save loss in text file
             c = [training_loss_list, validation_loss_list]
-            with open("loss.txt", "w") as file:
+            with open("loss.txt", "a") as file:
                 for x in zip(*c):
                     file.write("{0}\t{1}\n".format(*x))
 
@@ -206,7 +181,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--num-epochs",
                         dest="num_epochs",
                         help="Number of epochs.",
-                        default=2, type=int)
+                        default=5, type=int)
 
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
@@ -216,7 +191,7 @@ if __name__ == '__main__':
     parser.add_argument("-l", "--learn-rate",
                         dest="lr",
                         help="Learning rate",
-                        default=0.0001, type=float)
+                        default=0.001, type=float)
 
     parser.add_argument("-T", "--tb_dir", dest="tb_dir",
                         help="Tensorboard logging directory",
