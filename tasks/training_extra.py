@@ -27,8 +27,7 @@ Creates and trains a basic transformer for the IMDB sentiment classification tas
 """
 def main(arg):
 
-    cuda_flag = False
-    device = 'cuda' if cuda_flag and torch.cuda.is_available() else 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Device: ", device)
 
     convtexts = pd.read_csv('.data/dialogue_data.tsv', sep='\t')
