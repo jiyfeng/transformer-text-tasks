@@ -27,7 +27,8 @@ Creates and trains a basic transformer for the IMDB sentiment classification tas
 """
 def main(arg):
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    cuda_flag = True
+    device = 'cuda' if cuda_flag and torch.cuda.is_available() else 'cpu'
     print("Device: ", device)
 
     convtexts = pd.read_csv('.data/dialogue_data.tsv', sep='\t')
@@ -54,8 +55,12 @@ def main(arg):
     #         print(src, tar)
     #     it += 1
 
-    if device == 'cuda':
-        model.cuda()
+    if torch.cuda.device_count() > 1:
+        print("Running on ", torch.cuda.device_count(), "GPU's")
+        model = nn.DataParallel(model)
+        model.to(device)
+    else:
+        model.to(device)
 
     optim = torch.optim.Adam(lr=arg.lr, params=model.parameters())
     sched = torch.optim.lr_scheduler.LambdaLR(optim, lambda i: min(i / (arg.lr_warmup / arg.batch_size), 1.0))
@@ -83,9 +88,8 @@ def main(arg):
                 for tar_el in tok_tar:
                     inp_tensor = torch.tensor([tok_inp])
                     tar = torch.tensor(tar_el)
-                    if device == 'cuda':
-                        inp_tensor = inp_tensor.to('cuda')
-                        tar = tar.to('cuda')
+                    inp_tensor = inp_tensor.to(device)
+                    tar = tar.to(device)
                     output = model(inp_tensor)
                     pred = output[0][0][-1]
                     pred_prob = F.softmax(pred)
@@ -122,9 +126,8 @@ def main(arg):
                     for tar in tok_tar:
                         inp_tensor = torch.tensor([tok_inp])
                         tar = torch.tensor(tar)
-                        if device == 'cuda':
-                            inp_tensor = inp_tensor.to('cuda')
-                            tar = tar.to('cuda')
+                        inp_tensor = inp_tensor.to(device)
+                        tar = tar.to(device)
                         output = model(inp_tensor)
                         pred = output[0][0][-1]
                         pred_prob = F.softmax(pred)
