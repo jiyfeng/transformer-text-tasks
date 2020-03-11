@@ -102,7 +102,8 @@ def main(arg):
                     optim.step()
                     pred_idx = top_p_sampling(pred_prob, p=arg.top_p)
                     scheduled_sample = scheduled_sampler(pred_idx, tar_el, 0.2)
-                    tok_inp.append(scheduled_sample)
+                    #tok_inp.append(scheduled_sample)
+                    tok_inp.append(tar_el)
                     seen += inp_tensor.size(0)
 
         print("epoch", epoch, "training_loss", training_loss)
