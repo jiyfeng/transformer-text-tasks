@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pylab as plt
 import torch
 import torch.nn as nn
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
 from torchtext import data
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
@@ -18,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 
 max_len = 40 
 batch_size = 64
-num_epochs = 2
+num_epochs = 10
 learning_rate = 0.001
 cuda = True
 data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus/'
@@ -81,7 +82,10 @@ train_iterator, valid_iterator = data.BucketIterator.splits(
 print("No. of Batches in training data", len(train_iterator))
 print("No. of Batches in validation data", len(valid_iterator))
 
-optimizer = torch.optim.Adam(lr=learning_rate, params=model.parameters())
+#optimizer = torch.optim.Adam(lr=learning_rate, params=model.parameters())
+optimizer = torch.optim.SGD(lr=learning_rate, params=model.parameters(), momentum=0.9)
+
+scheduler = CyclicLR(optimizer, base_lr=learning_rate, max_lr=1, mode="exp_range", gamma=0.9994)
 
 # next(iter(train_iterator))
 
@@ -102,10 +106,7 @@ for epoch in range(num_epochs):
     model.train()
     training_loss = 0
     for i, batch in enumerate(train_iterator):
-        optimizer.zero_grad()
         # Get source and target
-        #print(batch.src)
-        #print(batch.trg)
         print("epoch", epoch, "i", i)
         source = batch.src
         target = batch.trg
@@ -115,6 +116,7 @@ for epoch in range(num_epochs):
         if target.size(1) > max_len:
             target = target[:, :max_len]              
         for ind in range(target.shape[1]):
+            optimizer.zero_grad()
             label = target[:,ind]
             tokens_tensor = torch.tensor(source)
             out = model(tokens_tensor)
@@ -125,7 +127,7 @@ for epoch in range(num_epochs):
             training_loss += loss.item()
             loss.backward()
             optimizer.step()
-            predicted_index = torch.argmax(predictions).item()
+            predicted_index = torch.argmax(predictions, dim = 1)
             tokens_tensor = torch.cat((tokens_tensor, label.unsqueeze(1)), dim = 1)
     print("epoch", epoch, "training_loss", training_loss)
     training_loss_list.append(training_loss)
@@ -157,7 +159,8 @@ for epoch in range(num_epochs):
         predicted_text = tokenizer.decode(tokens_tensor[0].tolist())
         print("Target: ", tokenizer.decode(target[0].tolist()))
         print("Source Given: ", tokenizer.decode(source[0].tolist()))
-        print("Predicted: ", predicted_text) 
+        print("Predicted: ", predicted_text)
+        scheduler.step(validation_loss) 
         # Save loss in text file
         c = [training_loss_list, validation_loss_list]
         with open("./loss.txt", "a") as file:
