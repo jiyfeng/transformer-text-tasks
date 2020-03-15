@@ -16,14 +16,14 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-max_len = 20 
-vocab_size = 40000
-batch_size = 16
+max_len = 40 
+batch_size = 64
 num_epochs = 2
 learning_rate = 0.001
+cuda = True
+data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus/'
 
 # Set device type
-cuda = True
 if cuda and torch.cuda.is_available():
     print("Running on GPU")
     device = torch.device("cuda")
@@ -33,8 +33,6 @@ else:
 
 print("-" * 84)
 print("Running on device type: {}".format(device))
-
-data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus/'
 
 # os.chdir(data_dir)
 convtexts = pd.read_csv(data_dir + 'dialogue_data.csv', sep=',')
@@ -80,7 +78,8 @@ train_iterator, valid_iterator = data.BucketIterator.splits(
     device=device
 )
 
-print("train_iterator", train_iterator)
+print("No. of Batches in training data", len(train_iterator))
+print("No. of Batches in validation data", len(valid_iterator))
 
 optimizer = torch.optim.Adam(lr=learning_rate, params=model.parameters())
 
@@ -110,6 +109,11 @@ for epoch in range(num_epochs):
         print("epoch", epoch, "i", i)
         source = batch.src
         target = batch.trg
+        # Trim source text
+        if source.size(1) > max_len:
+            source = source[:, :max_len]
+        if target.size(1) > max_len:
+            target = target[:, :max_len]              
         for ind in range(target.shape[1]):
             label = target[:,ind]
             tokens_tensor = torch.tensor(source)
@@ -125,12 +129,17 @@ for epoch in range(num_epochs):
             tokens_tensor = torch.cat((tokens_tensor, label.unsqueeze(1)), dim = 1)
     print("epoch", epoch, "training_loss", training_loss)
     training_loss_list.append(training_loss)
+    #Evaluation on Validation data
     with torch.no_grad():
         model.eval()
         validation_loss = 0
         for i, batch in enumerate(valid_iterator):
             source = batch.src
             target = batch.trg
+            if source.size(1) > max_len:
+                source = source[:, :max_len]
+            if target.size(1) > max_len:
+                target = target[:, :max_len]                  
             for ind in range(target.shape[1]):
                 label = target[:,ind]
                 tokens_tensor = torch.tensor(source)
@@ -144,6 +153,7 @@ for epoch in range(num_epochs):
                 tokens_tensor = torch.cat((tokens_tensor, predicted_index.unsqueeze(1)), dim = 1)
         print("epoch", epoch, "validation_loss", validation_loss)
         validation_loss_list.append(validation_loss)
+        # Print the predicted text
         predicted_text = tokenizer.decode(tokens_tensor[0].tolist())
         print("Target: ", tokenizer.decode(target[0].tolist()))
         print("Source Given: ", tokenizer.decode(source[0].tolist()))
