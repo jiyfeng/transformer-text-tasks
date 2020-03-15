@@ -1,7 +1,12 @@
+# Supress unnecessary warnings so that presentation looks clean
+import warnings
+warnings.filterwarnings('ignore')
+
 import numpy as np
 import os
 import csv
 import pandas as pd
+import matplotlib.pylab as plt
 import torch
 import torch.nn as nn
 from torchtext import data
@@ -14,9 +19,9 @@ logging.basicConfig(level=logging.INFO)
 max_len = 20 
 cuda = False
 vocab_size = 40000
-batch_size = 16
+batch_size = 64
 num_epochs = 2
-learning_rate = 0.01
+learning_rate = 0.001
 
 # Set device type
 cuda = True
@@ -24,26 +29,29 @@ if cuda and torch.cuda.is_available():
     print("Running on GPU")
     device = torch.device("cuda")
 else:
+    print("Running on CPU")
     device = torch.device("cpu")
 
 print("-" * 84)
 print("Running on device type: {}".format(device))
 
-data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus'
+data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus/'
 
-os.chdir(data_dir)
-convtexts = pd.read_csv('dialogue_data.csv', sep=',')
+# os.chdir(data_dir)
+convtexts = pd.read_csv(data_dir + 'dialogue_data.csv', sep=',')
 convtexts = np.array(convtexts).tolist()
-print(convtexts[:3])
+print("Data Example")
+print(convtexts[:1])
 
 # Load pre-trained model tokenizer (vocabulary)
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 model = GPT2LMHeadModel.from_pretrained('gpt2')
 
 
-train_file = 'dialogue_data.csv'
-valid_file  = 'dialogue_data.csv'
+train_file = data_dir + 'dialogue_data.csv'
+valid_file  = data_dir + 'dialogue_data.csv'
 
+# Data Parallelism over 4 GPUs
 if torch.cuda.device_count() > 1:
     print("Running on ", torch.cuda.device_count(), "GPU's")
     model = nn.DataParallel(model)
@@ -61,9 +69,8 @@ TEXT = data.Field(
     preprocessing=preprocessor,
     fix_length=max_len
 )
-
-
 fields = [("src", TEXT), ("trg", TEXT)]
+
 train_data, valid_data = data.TabularDataset.splits(
     path=data_dir,
     train=train_file,
@@ -73,7 +80,6 @@ train_data, valid_data = data.TabularDataset.splits(
 )
 
 TEXT.build_vocab(train_data, max_size=vocab_size - 2)
-
 
 train_iterator, valid_iterator = data.BucketIterator.splits(
     (train_data, valid_data),
@@ -89,11 +95,14 @@ optimizer = torch.optim.Adam(lr=learning_rate, params=model.parameters())
 
 
 # Start Training
+training_loss_list = []
+validation_loss_list = []
+    
 print("-" * 84)
 print("Start Training")
 for epoch in range(num_epochs):
     model.train()
-    per_epoch_loss = 0
+    training_loss = 0
     for i, batch in enumerate(train_iterator):
         optimizer.zero_grad()
         # Get source and target
@@ -110,23 +119,57 @@ for epoch in range(num_epochs):
             predictions = torch.softmax(out[:, -1, :], dim = 0)
             predictions = torch.log(predictions)
             loss = nn.functional.nll_loss(predictions, torch.tensor(label))
-            per_epoch_loss += loss.item()
+            training_loss += loss.item()
             loss.backward()
             optimizer.step()
             predicted_index = torch.argmax(predictions).item()
             tokens_tensor = torch.cat((tokens_tensor, label.unsqueeze(1)), dim = 1)
-        #predicted_text = tokenizer.decode(indexed_tokens)
-        #print("Target: ", target)
-        #print("Source Given: ", source)
-        #print("Predicted: ", predicted_text)
+    print("epoch", epoch, "training_loss", training_loss)
+    training_loss_list.append(training_loss)
+    with torch.no_grad():
+        model.eval()
+        validation_loss = 0
+        for i, batch in enumerate(valid_iterator):
+            source = batch.src[0]
+            target = batch.trg[0]
+            for ind in range(target.shape[1]):
+                label = target[:,ind]
+                tokens_tensor = torch.tensor(source)
+                out = model(tokens_tensor)
+                out = out[0]
+                predictions = torch.softmax(out[:, -1, :], dim = 0)
+                predictions = torch.log(predictions)
+                loss = nn.functional.nll_loss(predictions, torch.tensor(label))
+                validation_loss += loss.item()
+                predicted_index = torch.argmax(predictions, dim = 1)
+                tokens_tensor = torch.cat((tokens_tensor, predicted_index.unsqueeze(1)), dim = 1)
+        print("epoch", epoch, "validation_loss", validation_loss)
+        validation_loss_list.append(validation_loss)
+        predicted_text = tokenizer.decode(tokens_tensor[0].tolist())
+        print("Target: ", tokenizer.decode(target[0].tolist()))
+        print("Source Given: ", tokenizer.decode(source[0].tolist()))
+        print("Predicted: ", predicted_text) 
+        # Save loss in text file
+        c = [training_loss_list, validation_loss_list]
+        with open("./loss.txt", "a") as file:
+            for x in zip(*c):
+                file.write("{0}\t{1}\n".format(*x))      
 
-model_file = 'saved_model.pkl'
-torch.save(model, model_file)
+
+plt.figure(figsize = (10, 4))
+plt.subplot(1, 2, 1)
+plt.plot(validation_loss_list, 'bo-', label = 'val-loss')
+plt.plot(training_loss_list, 'ro-', label = 'train-loss')
+plt.grid('on')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['validation', 'training'], loc='upper right')
+#plt.savefig("./Loss_vs_epoch.png")
+
+model_file = './saved_model.pkl'
+#torch.save(model, model_file)
 print("training complete")
 
-# Start Evaluation
-print("-" * 84)
-print("Start Evaluation")
-
+#Load model for evaluation
 # model = torch.load(model_file)
 # model.eval()
