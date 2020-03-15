@@ -17,9 +17,8 @@ logging.basicConfig(level=logging.INFO)
 
 
 max_len = 20 
-cuda = False
 vocab_size = 40000
-batch_size = 64
+batch_size = 16
 num_epochs = 2
 learning_rate = 0.001
 
@@ -59,16 +58,10 @@ if torch.cuda.device_count() > 1:
 else:
     model.to(device)
 
-def preprocessor(batch):
-    return tokenizer.encode(batch)
+tokenizer.pad_token = '<PAD>'
+pad_index = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
 
-TEXT = data.Field(
-    lower=True,
-    include_lengths=True,
-    batch_first=True,
-    preprocessing=preprocessor,
-    fix_length=max_len
-)
+TEXT = data.Field(use_vocab=False, tokenize=tokenizer.encode, pad_token=pad_index, batch_first =True)
 fields = [("src", TEXT), ("trg", TEXT)]
 
 train_data, valid_data = data.TabularDataset.splits(
@@ -79,20 +72,26 @@ train_data, valid_data = data.TabularDataset.splits(
     fields=fields,
 )
 
-TEXT.build_vocab(train_data, max_size=vocab_size - 2)
-
 train_iterator, valid_iterator = data.BucketIterator.splits(
     (train_data, valid_data),
     batch_size=batch_size,
     sort_key=lambda x: x.src,
     sort_within_batch=False,
-    device=device,
+    device=device
 )
 
 print("train_iterator", train_iterator)
 
 optimizer = torch.optim.Adam(lr=learning_rate, params=model.parameters())
 
+# next(iter(train_iterator))
+
+# for i, batch in enumerate(train_iterator):
+#         source = batch.src[2]
+#         target = batch.trg[2]
+#         print(source)
+#         print("Source Given: ", tokenizer.decode(source.tolist()))
+#         break
 
 # Start Training
 training_loss_list = []
@@ -109,8 +108,8 @@ for epoch in range(num_epochs):
         #print(batch.src)
         #print(batch.trg)
         print("epoch", epoch, "i", i)
-        source = batch.src[0]
-        target = batch.trg[0]
+        source = batch.src
+        target = batch.trg
         for ind in range(target.shape[1]):
             label = target[:,ind]
             tokens_tensor = torch.tensor(source)
@@ -130,8 +129,8 @@ for epoch in range(num_epochs):
         model.eval()
         validation_loss = 0
         for i, batch in enumerate(valid_iterator):
-            source = batch.src[0]
-            target = batch.trg[0]
+            source = batch.src
+            target = batch.trg
             for ind in range(target.shape[1]):
                 label = target[:,ind]
                 tokens_tensor = torch.tensor(source)
@@ -164,10 +163,10 @@ plt.grid('on')
 plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['validation', 'training'], loc='upper right')
-#plt.savefig("./Loss_vs_epoch.png")
+plt.savefig("./Loss_vs_epoch.png")
 
 model_file = './saved_model.pkl'
-#torch.save(model, model_file)
+torch.save(model, model_file)
 print("training complete")
 
 #Load model for evaluation
