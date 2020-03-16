@@ -17,9 +17,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-max_len = 40 
-batch_size = 64
-num_epochs = 10
+max_len = 20 
+batch_size = 32
+num_epochs = 5
 learning_rate = 0.001
 cuda = True
 data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus/'
@@ -36,7 +36,7 @@ print("-" * 84)
 print("Running on device type: {}".format(device))
 
 # os.chdir(data_dir)
-convtexts = pd.read_csv(data_dir + 'dialogue_data.csv', sep=',')
+convtexts = pd.read_csv(data_dir + 'dialogue_training_data.csv', sep=',')
 convtexts = np.array(convtexts).tolist()
 print("Data Example")
 print(convtexts[:1])
@@ -46,8 +46,8 @@ tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 model = GPT2LMHeadModel.from_pretrained('gpt2')
 
 
-train_file = data_dir + 'dialogue_data.csv'
-valid_file  = data_dir + 'dialogue_data.csv'
+train_file = data_dir + 'dialogue_training_data.csv'
+valid_file  = data_dir + 'dialogue_validation_data.csv'
 
 # Data Parallelism over 4 GPUs
 if torch.cuda.device_count() > 1:
@@ -96,6 +96,8 @@ scheduler = CyclicLR(optimizer, base_lr=learning_rate, max_lr=1, mode="exp_range
 #         print("Source Given: ", tokenizer.decode(source.tolist()))
 #         break
 
+# model.to(device)
+
 # Start Training
 training_loss_list = []
 validation_loss_list = []
@@ -107,24 +109,27 @@ for epoch in range(num_epochs):
     training_loss = 0
     for i, batch in enumerate(train_iterator):
         # Get source and target
-        print("epoch", epoch, "i", i)
+        print("epoch", epoch, "i", i, "training_loss", training_loss)
         source = batch.src
         target = batch.trg
         # Trim source text
         if source.size(1) > max_len:
             source = source[:, :max_len]
         if target.size(1) > max_len:
-            target = target[:, :max_len]              
+            target = target[:, :max_len]
+        tokens_tensor = torch.tensor(source)              
         for ind in range(target.shape[1]):
             optimizer.zero_grad()
             label = target[:,ind]
-            tokens_tensor = torch.tensor(source)
             out = model(tokens_tensor)
             out = out[0]
+            # print(out[1])
             predictions = torch.softmax(out[:, -1, :], dim = 0)
             predictions = torch.log(predictions)
             loss = nn.functional.nll_loss(predictions, torch.tensor(label))
-            training_loss += loss.item()
+            print(loss)
+            if not torch.isnan(loss).item():
+                training_loss += loss.item()
             loss.backward()
             optimizer.step()
             predicted_index = torch.argmax(predictions, dim = 1)
@@ -141,16 +146,17 @@ for epoch in range(num_epochs):
             if source.size(1) > max_len:
                 source = source[:, :max_len]
             if target.size(1) > max_len:
-                target = target[:, :max_len]                  
+                target = target[:, :max_len] 
+            tokens_tensor = torch.tensor(source)                 
             for ind in range(target.shape[1]):
                 label = target[:,ind]
-                tokens_tensor = torch.tensor(source)
                 out = model(tokens_tensor)
                 out = out[0]
                 predictions = torch.softmax(out[:, -1, :], dim = 0)
                 predictions = torch.log(predictions)
                 loss = nn.functional.nll_loss(predictions, torch.tensor(label))
-                validation_loss += loss.item()
+                if not torch.isnan(loss).item():
+                    validation_loss += loss.item()
                 predicted_index = torch.argmax(predictions, dim = 1)
                 tokens_tensor = torch.cat((tokens_tensor, predicted_index.unsqueeze(1)), dim = 1)
         print("epoch", epoch, "validation_loss", validation_loss)
@@ -165,7 +171,9 @@ for epoch in range(num_epochs):
         c = [training_loss_list, validation_loss_list]
         with open("./loss.txt", "a") as file:
             for x in zip(*c):
-                file.write("{0}\t{1}\n".format(*x))      
+                file.write("{0}\t{1}\n".format(*x)) 
+        model_file = './saved_model.pkl'
+        torch.save(model, model_file)  
 
 
 plt.figure(figsize = (10, 4))
