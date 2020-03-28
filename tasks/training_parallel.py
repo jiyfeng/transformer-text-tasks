@@ -12,15 +12,16 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
 from torchtext import data
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
+import sys
 
 import logging
 logging.basicConfig(level=logging.INFO)
 
 
 max_len = 20 
-batch_size = 32
+batch_size = 64
 num_epochs = 5
-learning_rate = 0.001
+learning_rate = 0.0001
 cuda = True
 data_dir = '/u/gj3bg/gj3bg/cornell movie-dialogs corpus/'
 
@@ -96,7 +97,8 @@ scheduler = CyclicLR(optimizer, base_lr=learning_rate, max_lr=1, mode="exp_range
 #         print("Source Given: ", tokenizer.decode(source.tolist()))
 #         break
 
-# model.to(device)
+model = GPT2LMHeadModel.from_pretrained('gpt2')
+model.to(device)
 
 # Start Training
 training_loss_list = []
@@ -109,7 +111,7 @@ for epoch in range(num_epochs):
     training_loss = 0
     for i, batch in enumerate(train_iterator):
         # Get source and target
-        print("epoch", epoch, "i", i, "training_loss", training_loss)
+        print("epoch", epoch, "i", i, "avg_training_loss_per_batch", training_loss/(i+1))
         source = batch.src
         target = batch.trg
         # Trim source text
@@ -127,15 +129,17 @@ for epoch in range(num_epochs):
             predictions = torch.softmax(out[:, -1, :], dim = 0)
             predictions = torch.log(predictions)
             loss = nn.functional.nll_loss(predictions, torch.tensor(label))
-            print(loss)
-            if not torch.isnan(loss).item():
+            #print(loss)
+            if not torch.isinf(loss).item():
                 training_loss += loss.item()
             loss.backward()
             optimizer.step()
             predicted_index = torch.argmax(predictions, dim = 1)
             tokens_tensor = torch.cat((tokens_tensor, label.unsqueeze(1)), dim = 1)
-    print("epoch", epoch, "training_loss", training_loss)
+        #sys.exit()
+    print("epoch", epoch, "training_loss_per_epoch", training_loss)
     training_loss_list.append(training_loss)
+    
     #Evaluation on Validation data
     with torch.no_grad():
         model.eval()
@@ -155,7 +159,7 @@ for epoch in range(num_epochs):
                 predictions = torch.softmax(out[:, -1, :], dim = 0)
                 predictions = torch.log(predictions)
                 loss = nn.functional.nll_loss(predictions, torch.tensor(label))
-                if not torch.isnan(loss).item():
+                if not torch.isinf(loss).item():
                     validation_loss += loss.item()
                 predicted_index = torch.argmax(predictions, dim = 1)
                 tokens_tensor = torch.cat((tokens_tensor, predicted_index.unsqueeze(1)), dim = 1)
@@ -166,14 +170,14 @@ for epoch in range(num_epochs):
         print("Target: ", tokenizer.decode(target[0].tolist()))
         print("Source Given: ", tokenizer.decode(source[0].tolist()))
         print("Predicted: ", predicted_text)
-        scheduler.step(validation_loss) 
+        #scheduler.step(validation_loss) 
         # Save loss in text file
         c = [training_loss_list, validation_loss_list]
         with open("./loss.txt", "a") as file:
             for x in zip(*c):
                 file.write("{0}\t{1}\n".format(*x)) 
         model_file = './saved_model.pkl'
-        torch.save(model, model_file)  
+        #torch.save(model, model_file)  
 
 
 plt.figure(figsize = (10, 4))
@@ -187,7 +191,7 @@ plt.legend(['validation', 'training'], loc='upper right')
 plt.savefig("./Loss_vs_epoch.png")
 
 model_file = './saved_model.pkl'
-torch.save(model, model_file)
+#torch.save(model, model_file)
 print("training complete")
 
 #Load model for evaluation
