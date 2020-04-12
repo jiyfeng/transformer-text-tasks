@@ -7,7 +7,7 @@ warnings.filterwarnings('ignore')
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torchtext import data, datasets
+from torchtext import data
 from argparse import ArgumentParser
 # from torch.utils.tensorboard import SummaryWriter
 import tqdm     # CLI progress bar
@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pylab as plt
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
-from tasks.decoder import top_p_sampling, scheduled_sampler
+from tasks.utils.decoder import top_p_sampling, scheduled_sampler
 
 TEXT = data.Field(lower=True, include_lengths=True, batch_first=True)
 LABEL = data.Field(sequential=False)

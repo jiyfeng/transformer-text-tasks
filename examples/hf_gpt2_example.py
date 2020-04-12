@@ -1,7 +1,7 @@
 import torch
 from torch.nn import functional as F
 
-from tasks.decoder import top_k_sampling, top_p_sampling
+from tasks.utils.decoder import top_p_sampling
 
 convlines = []
 j = 0
